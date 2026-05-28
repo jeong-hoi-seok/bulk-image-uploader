@@ -26,6 +26,8 @@ const EMPTY_SESSION: SessionMetrics = {
 interface WorkerResult {
   id: string
   blob: Blob
+  width: number
+  height: number
   metrics: {
     compressTime: number
     resizeTime: number
@@ -153,7 +155,7 @@ export function useUploadPipeline() {
         prev.map((f) => (f.id === item.id ? { ...f, progress: 30 } : f)),
       )
 
-      const { blob, metrics } = workerResult
+      const { blob, width, height, metrics } = workerResult
       const mimeType = blob.type || `image/${opts.outputFormat}`
       const baseName = item.file.name.replace(/\.[^.]+$/, '')
       const ext = opts.outputFormat
@@ -192,8 +194,8 @@ export function useUploadPipeline() {
                 serverMetrics: {
                   resizeMs,
                   uploadMs,
-                  width: 0,
-                  height: 0,
+                  width,
+                  height,
                   originalSize: metrics.originalSize,
                   resizedSize: metrics.processedSize,
                   usedOriginal: false,

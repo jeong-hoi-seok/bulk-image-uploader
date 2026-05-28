@@ -12,6 +12,8 @@ interface WorkerMessage {
 interface WorkerResult {
   id: string
   blob: Blob
+  width: number
+  height: number
   metrics: {
     compressTime: number
     resizeTime: number
@@ -39,13 +41,20 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
 
     // Format convert via canvas if needed
     let finalBlob: Blob
+    let width: number
+    let height: number
     if (outputFormat === 'webp' || outputFormat === 'png') {
       const bitmap = await createImageBitmap(compressed)
-      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+      width = bitmap.width
+      height = bitmap.height
+      const canvas = new OffscreenCanvas(width, height)
       const ctx = canvas.getContext('2d')!
       ctx.drawImage(bitmap, 0, 0)
       finalBlob = await canvas.convertToBlob({ type: `image/${outputFormat}`, quality })
     } else {
+      const bitmap = await createImageBitmap(compressed)
+      width = bitmap.width
+      height = bitmap.height
       finalBlob = compressed
     }
     const t2 = performance.now()
@@ -53,6 +62,8 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     const result: WorkerResult = {
       id,
       blob: finalBlob,
+      width,
+      height,
       metrics: {
         compressTime: t1 - t0,
         resizeTime: t1 - t0,
