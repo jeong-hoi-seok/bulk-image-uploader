@@ -4,7 +4,7 @@ import type { OutputFormat } from '@/types/image'
 interface WorkerMessage {
   id: string
   file: File
-  maxWidthOrHeight: number
+  maxWidthOrHeight?: number
   quality: number
   outputFormat: OutputFormat
 }
@@ -30,7 +30,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
 
     // Resize + compress
     const compressed = await imageCompression(file, {
-      maxWidthOrHeight,
+      ...(maxWidthOrHeight ? { maxWidthOrHeight } : {}),
       useWebWorker: false, // already in worker
       initialQuality: quality,
       fileType: `image/${outputFormat}`,

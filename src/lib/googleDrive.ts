@@ -16,6 +16,40 @@ function getAuth() {
   return oauth2
 }
 
+export async function createResumableUploadSession(
+  fileName: string,
+  mimeType: string,
+  fileSize: number,
+): Promise<string> {
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
+  if (!folderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID env not set')
+
+  const auth = getAuth()
+  const { token } = await auth.getAccessToken()
+  if (!token) throw new Error('Failed to get access token')
+
+  const res = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,webViewLink',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-Upload-Content-Type': mimeType,
+        'X-Upload-Content-Length': String(fileSize),
+      },
+      body: JSON.stringify({ name: fileName, parents: [folderId] }),
+    },
+  )
+
+  if (!res.ok) throw new Error(`Drive session init failed: ${res.status}`)
+
+  const sessionUri = res.headers.get('location')
+  if (!sessionUri) throw new Error('Drive did not return session URI')
+
+  return sessionUri
+}
+
 export async function uploadToDrive(
   buffer: Buffer,
   fileName: string,

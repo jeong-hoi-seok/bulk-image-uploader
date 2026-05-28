@@ -23,6 +23,101 @@ const EMPTY_SESSION: SessionMetrics = {
   elapsedMs: 0,
 }
 
+interface WorkerResult {
+  id: string
+  blob: Blob
+  metrics: {
+    compressTime: number
+    resizeTime: number
+    convertTime: number
+    originalSize: number
+    processedSize: number
+  }
+}
+
+function processWithWorker(
+  item: UploadFile,
+  opts: ProcessingOptions,
+): Promise<WorkerResult> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(
+      new URL('../workers/imageProcessor.worker.ts', import.meta.url),
+    )
+    worker.onmessage = (e) => {
+      worker.terminate()
+      if (e.data.type === 'error') {
+        reject(new Error(e.data.message))
+      } else {
+        resolve(e.data as WorkerResult)
+      }
+    }
+    worker.onerror = (e) => {
+      worker.terminate()
+      reject(new Error(e.message))
+    }
+    worker.postMessage({
+      id: item.id,
+      file: item.file,
+      quality: opts.quality / 100,
+      outputFormat: opts.outputFormat,
+    })
+  })
+}
+
+async function getSessionUri(name: string, mimeType: string, size: number): Promise<string> {
+  const res = await fetch('/api/drive/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, mimeType, size }),
+  })
+  const isJson = res.headers.get('content-type')?.includes('application/json')
+  const data = isJson ? await res.json() : null
+  if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+  return data.sessionUri as string
+}
+
+const CHUNK_SIZE = 4 * 1024 * 1024 // 4 MB — stays under Vercel 4.5 MB limit
+
+async function uploadViaChunks(
+  sessionUri: string,
+  blob: Blob,
+  onProgress: (pct: number) => void,
+): Promise<{ id: string; webViewLink: string }> {
+  const total = blob.size
+  let start = 0
+
+  while (start < total) {
+    const end = Math.min(start + CHUNK_SIZE, total)
+    const chunk = blob.slice(start, end)
+    const buffer = await chunk.arrayBuffer()
+
+    const res = await fetch('/api/drive/chunk', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-Drive-Session': sessionUri,
+        'X-Range-Start': String(start),
+        'X-Range-Total': String(total),
+      },
+      body: buffer,
+    })
+
+    const isJson = res.headers.get('content-type')?.includes('application/json')
+    const data = isJson ? await res.json() : null
+    if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+
+    onProgress(Math.round((end / total) * 100))
+
+    if (data.done) {
+      return { id: data.id, webViewLink: data.webViewLink }
+    }
+
+    start = end
+  }
+
+  throw new Error('Upload ended without completion signal')
+}
+
 export function useUploadPipeline() {
   const [files, setFiles] = useState<UploadFile[]>([])
   const [options, setOptions] = useState<ProcessingOptions>(DEFAULT_OPTIONS)
@@ -36,7 +131,6 @@ export function useUploadPipeline() {
   const optionsRef = useRef(options)
   optionsRef.current = options
 
-  // queue of pending ids waiting to be processed
   const queueRef = useRef<UploadFile[]>([])
   const runningRef = useRef(false)
 
@@ -45,29 +139,46 @@ export function useUploadPipeline() {
     const opts = optionsRef.current
 
     setFiles((prev) =>
-      prev.map((f) => (f.id === item.id ? { ...f, status: 'uploading', progress: 20 } : f)),
+      prev.map((f) => (f.id === item.id ? { ...f, status: 'uploading', progress: 5 } : f)),
     )
 
-    const formData = new FormData()
-    formData.append('files', item.file)
-    formData.append('quality', String(opts.quality))
-    formData.append('outputFormat', opts.outputFormat)
-
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      // Step 1: client-side compress
+      const t0 = Date.now()
+      const workerResult = await processWithWorker(item, opts)
+      const resizeMs = Date.now() - t0
       if (cancelledIds.current.has(item.id)) return
 
       setFiles((prev) =>
-        prev.map((f) => (f.id === item.id ? { ...f, progress: 80 } : f)),
+        prev.map((f) => (f.id === item.id ? { ...f, progress: 30 } : f)),
       )
 
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      const { blob, metrics } = workerResult
+      const mimeType = blob.type || `image/${opts.outputFormat}`
+      const baseName = item.file.name.replace(/\.[^.]+$/, '')
+      const ext = opts.outputFormat
+      const fileName = `${baseName}.${ext}`
 
-      const result = data.results?.[0]
-      const apiError = data.errors?.[0]
-      if (apiError) throw new Error(apiError.error)
-      if (!result) throw new Error('No result from server')
+      // Step 2: get Drive resumable session URI
+      const sessionUri = await getSessionUri(fileName, mimeType, blob.size)
+      if (cancelledIds.current.has(item.id)) return
+
+      setFiles((prev) =>
+        prev.map((f) => (f.id === item.id ? { ...f, progress: 40 } : f)),
+      )
+
+      // Step 3: upload directly to Drive
+      const t1 = Date.now()
+      const { id, webViewLink } = await uploadViaChunks(sessionUri, blob, (pct) => {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === item.id ? { ...f, progress: 40 + Math.round(pct * 0.6) } : f,
+          ),
+        )
+      })
+      const uploadMs = Date.now() - t1
+
+      if (cancelledIds.current.has(item.id)) return
 
       setFiles((prev) =>
         prev.map((f) =>
@@ -76,16 +187,16 @@ export function useUploadPipeline() {
                 ...f,
                 status: 'done',
                 progress: 100,
-                driveId: result.driveId,
-                webViewLink: result.webViewLink,
+                driveId: id,
+                webViewLink,
                 serverMetrics: {
-                  resizeMs: result.resizeMs,
-                  uploadMs: result.uploadMs,
-                  width: result.width,
-                  height: result.height,
-                  originalSize: result.originalSize,
-                  resizedSize: result.resizedSize,
-                  usedOriginal: result.usedOriginal ?? false,
+                  resizeMs,
+                  uploadMs,
+                  width: 0,
+                  height: 0,
+                  originalSize: metrics.originalSize,
+                  resizedSize: metrics.processedSize,
+                  usedOriginal: false,
                 },
               }
             : f,
@@ -98,10 +209,10 @@ export function useUploadPipeline() {
         return {
           ...s,
           processedFiles: n,
-          totalOriginalSize: s.totalOriginalSize + result.originalSize,
-          totalResizedSize: s.totalResizedSize + result.resizedSize,
-          avgResizeMs: (s.avgResizeMs * s.processedFiles + result.resizeMs) / n,
-          avgUploadMs: (s.avgUploadMs * s.processedFiles + result.uploadMs) / n,
+          totalOriginalSize: s.totalOriginalSize + metrics.originalSize,
+          totalResizedSize: s.totalResizedSize + metrics.processedSize,
+          avgResizeMs: (s.avgResizeMs * s.processedFiles + resizeMs) / n,
+          avgUploadMs: (s.avgUploadMs * s.processedFiles + uploadMs) / n,
           peakMemoryMB: Math.max(s.peakMemoryMB, mem),
           elapsedMs: Date.now() - startTime.current,
         }
@@ -157,7 +268,6 @@ export function useUploadPipeline() {
 
     setFiles((prev) => {
       const next = [...prev, ...items]
-      // update totalFiles in session
       setSession((s) => ({
         ...s,
         totalFiles: s.totalFiles + items.length,
