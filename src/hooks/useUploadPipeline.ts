@@ -2,12 +2,13 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { generateId, getMemoryMB } from '@/lib/imageProcessor'
+import { createThumbnail } from '@/lib/thumbnail'
 import type { MemorySnapshot, ProcessingOptions, SessionMetrics, UploadFile } from '@/types/image'
 
 export { formatBytes } from '@/lib/imageProcessor'
 
 const DEFAULT_OPTIONS: ProcessingOptions = {
-  quality: 85,
+  quality: 50,
   outputFormat: 'jpeg',
 }
 
@@ -260,12 +261,13 @@ export function useUploadPipeline() {
   }, [uploadOne])
 
   const addFiles = useCallback((incoming: File[]) => {
+    // 일단 preview 없이 추가해서 즉시 렌더링
     const items: UploadFile[] = incoming.map((f) => ({
       id: generateId(),
       file: f,
       status: 'pending',
       progress: 0,
-      preview: URL.createObjectURL(f),
+      preview: '',
     }))
 
     setFiles((prev) => {
@@ -275,6 +277,15 @@ export function useUploadPipeline() {
         totalFiles: s.totalFiles + items.length,
       }))
       return next
+    })
+
+    // 비동기로 저해상도 썸네일 생성 (원본 objectURL 즉시 해제)
+    items.forEach((item) => {
+      createThumbnail(item.file, 80, 0.5).then((dataUrl) => {
+        setFiles((prev) =>
+          prev.map((f) => (f.id === item.id ? { ...f, preview: dataUrl } : f)),
+        )
+      }).catch(() => { /* 썸네일 실패 시 빈 상태 유지 */ })
     })
 
     queueRef.current.push(...items)
@@ -313,11 +324,41 @@ export function useUploadPipeline() {
     if (memTimer.current) { clearInterval(memTimer.current); memTimer.current = null }
     startTime.current = 0
     runningRef.current = false
-    setFiles((prev) => { prev.forEach((f) => URL.revokeObjectURL(f.preview)); return [] })
+    // preview는 DataURL이므로 revokeObjectURL 불필요
+    setFiles([])
     setSession(EMPTY_SESSION)
     setMemHistory([])
     setIsRunning(false)
   }, [])
+
+  const retry = useCallback((id: string) => {
+    let target: UploadFile | undefined
+
+    setFiles((prev) =>
+      prev.map((f) => {
+        if (f.id === id && (f.status === 'error' || f.status === 'cancelled')) {
+          target = { ...f, status: 'pending', progress: 0, error: undefined }
+          return target
+        }
+        return f
+      }),
+    )
+
+    if (!target) return
+
+    // 취소 플래그 제거
+    cancelledIds.current.delete(id)
+
+    // 세션 실패 카운터 보정
+    setSession((s) => ({
+      ...s,
+      totalFiles: s.totalFiles + 1,
+      failedFiles: Math.max(0, s.failedFiles - 1),
+    }))
+
+    queueRef.current.push(target)
+    drainQueue()
+  }, [drainQueue])
 
   return {
     files,
@@ -329,6 +370,7 @@ export function useUploadPipeline() {
     cancel,
     cancelAll,
     clearAll,
+    retry,
     setOptions,
   }
 }

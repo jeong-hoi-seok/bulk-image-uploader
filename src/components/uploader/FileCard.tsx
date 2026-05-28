@@ -20,9 +20,10 @@ const STATUS: Record<
 interface FileCardProps {
   file: UploadFile
   onCancel?: (id: string) => void
+  onRetry?: (id: string) => void
 }
 
-export function FileCard({ file, onCancel }: FileCardProps) {
+export function FileCard({ file, onCancel, onRetry }: FileCardProps) {
   const s = STATUS[file.status]
   const m = file.serverMetrics
 
@@ -82,6 +83,14 @@ export function FileCard({ file, onCancel }: FileCardProps) {
             className="text-xs text-zinc-500 hover:text-red-400 transition-colors"
           >
             취소
+          </button>
+        )}
+        {(file.status === 'error' || file.status === 'cancelled') && onRetry && (
+          <button
+            onClick={() => onRetry(file.id)}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-medium"
+          >
+            재시도 ↻
           </button>
         )}
         {file.status === 'done' && file.webViewLink && (

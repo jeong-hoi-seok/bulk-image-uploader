@@ -13,7 +13,6 @@ interface SettingsPanelProps {
 const FORMATS: { value: OutputFormat; label: string; desc: string }[] = [
   { value: 'jpeg', label: 'JPEG', desc: '범용, 작은 용량' },
   { value: 'webp', label: 'WebP', desc: '최신, 고압축' },
-  { value: 'png', label: 'PNG', desc: '무손실, 큰 용량' },
 ]
 
 export function SettingsPanel({ options, onChange, disabled }: SettingsPanelProps) {
@@ -22,7 +21,7 @@ export function SettingsPanel({ options, onChange, disabled }: SettingsPanelProp
   return (
     <Card className="bg-zinc-900 border-zinc-800">
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium text-zinc-300">처리 설정</CardTitle>
+        <CardTitle className="text-sm font-medium text-zinc-300">리사이징 옵션</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
         <div>
@@ -51,25 +50,22 @@ export function SettingsPanel({ options, onChange, disabled }: SettingsPanelProp
             <span className="text-xs text-zinc-400">품질</span>
             <span className="text-xs text-white">{options.quality}%</span>
           </div>
-          {/* inverted: right=high, left=low → store as-is, display 101-sliderVal */}
           <Slider
             min={1} max={100} step={1}
-            value={[101 - options.quality]}
+            value={[options.quality]}
             onValueChange={(v) => {
               const raw = Array.isArray(v) ? v[0] : v
-              if (typeof raw === 'number') set({ quality: 101 - raw })
+              if (typeof raw === 'number') set({ quality: raw })
             }}
             disabled={disabled}
           />
-          <div className="flex justify-between mt-1">
-            <span className="text-xs text-zinc-600">고품질</span>
+          <div className="flex justify-between mt-3">
             <span className="text-xs text-zinc-600">저품질</span>
+            <span className="text-xs text-zinc-600">고품질</span>
           </div>
         </div>
 
-        <div className="pt-1 border-t border-zinc-800">
-          <p className="text-xs text-zinc-600">파일 추가 즉시 순차 업로드 · 서버(sharp) 변환 → Drive</p>
-        </div>
+
       </CardContent>
     </Card>
   )

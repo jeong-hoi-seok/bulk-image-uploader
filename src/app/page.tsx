@@ -2,9 +2,9 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropZone } from '@/components/uploader/DropZone'
-import { FileCard } from '@/components/uploader/FileCard'
 import { SettingsPanel } from '@/components/uploader/SettingsPanel'
 import { MetricsDashboard } from '@/components/uploader/MetricsDashboard'
+import { VirtualFileList } from '@/components/uploader/VirtualFileList'
 import { useUploadPipeline } from '@/hooks/useUploadPipeline'
 
 export default function Home() {
@@ -18,6 +18,7 @@ export default function Home() {
     cancel,
     cancelAll,
     clearAll,
+    retry,
     setOptions,
   } = useUploadPipeline()
 
@@ -28,25 +29,16 @@ export default function Home() {
     <div className="min-h-screen bg-zinc-950 text-white">
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">Bulk Image Uploader</h1>
-          <p className="text-zinc-500 text-sm mt-1">
-            이미지 추가 즉시 순차 업로드 · 서버 변환(sharp) → Google Drive
-          </p>
+          <h1 className="text-2xl font-bold">멀티 이미지 리사이징 & 업로드</h1>
         </div>
 
         <Tabs defaultValue="upload">
           <TabsList className="bg-zinc-900 mb-6">
-            <TabsTrigger
-              value="upload"
-              className="text-zinc-400 data-[state=active]:text-white data-[state=inactive]:text-zinc-400"
-            >
+            <TabsTrigger value="upload">
               업로드
               {hasFiles && <span className="ml-1.5 text-zinc-500 text-xs">({files.length})</span>}
             </TabsTrigger>
-            <TabsTrigger
-              value="metrics"
-              className="text-zinc-400 data-[state=active]:text-white data-[state=inactive]:text-zinc-400"
-            >
+            <TabsTrigger value="metrics">
               부하 측정
               {doneCount > 0 && <span className="ml-1.5 text-emerald-500 text-xs">({doneCount})</span>}
             </TabsTrigger>
@@ -82,11 +74,7 @@ export default function Home() {
                   </div>
                 )}
 
-                <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
-                  {files.map((f) => (
-                    <FileCard key={f.id} file={f} onCancel={cancel} />
-                  ))}
-                </div>
+                <VirtualFileList files={files} onCancel={cancel} onRetry={retry} />
               </div>
 
               <div>

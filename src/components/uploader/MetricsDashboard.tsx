@@ -48,7 +48,7 @@ export function MetricsDashboard({ session, memHistory, files }: MetricsDashboar
         <Stat label="절약 용량" value={formatBytes(session.totalOriginalSize - session.totalResizedSize)} accent="emerald" />
         <Stat label="평균 리사이즈" value={`${session.avgResizeMs.toFixed(0)}ms`} />
         <Stat label="평균 업로드" value={`${session.avgUploadMs.toFixed(0)}ms`} />
-        <Stat label="최대 메모리" value={`${session.peakMemoryMB.toFixed(1)} MB`} />
+        <Stat label="최대 메모리 (근사치)" value={session.peakMemoryMB > 0 ? `~${session.peakMemoryMB.toFixed(0)} MB` : '-'} />
         <Stat label="총 소요시간" value={`${(session.elapsedMs / 1000).toFixed(1)}s`} />
       </div>
 
@@ -97,7 +97,10 @@ export function MetricsDashboard({ session, memHistory, files }: MetricsDashboar
       {memHistory.length > 1 && (
         <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs text-zinc-400">클라이언트 메모리 사용량 (MB)</CardTitle>
+            <CardTitle className="text-xs text-zinc-400">
+              JS 힙 메모리 추이 (MB)
+              <span className="ml-1.5 text-zinc-600 font-normal">· Chrome 전용 · 근사치</span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={140}>
@@ -105,7 +108,7 @@ export function MetricsDashboard({ session, memHistory, files }: MetricsDashboar
                 <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
                 <XAxis dataKey="t" hide />
                 <YAxis tick={{ fontSize: 10, fill: '#71717a' }} width={36} />
-                <Tooltip {...tooltipStyle} formatter={(v) => [`${v} MB`, 'Used']} labelFormatter={() => ''} />
+                <Tooltip {...tooltipStyle} formatter={(v) => [`~${v} MB`, 'JS 힙']} labelFormatter={() => ''} />
                 <Line type="monotone" dataKey="mb" stroke="#f59e0b" dot={false} strokeWidth={1.5} />
               </LineChart>
             </ResponsiveContainer>
