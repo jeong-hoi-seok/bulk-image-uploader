@@ -1,20 +1,20 @@
 export type OutputFormat = 'jpeg' | 'webp' | 'png'
 
-export type FileStatus = 'pending' | 'processing' | 'done' | 'error' | 'cancelled'
+export type FileStatus = 'pending' | 'uploading' | 'done' | 'error' | 'cancelled'
 
 export interface ProcessingOptions {
-  maxWidthOrHeight: number
-  quality: number // 0.1 ~ 1.0
+  quality: number // 1 ~ 100 (integer)
   outputFormat: OutputFormat
-  concurrency: number
 }
 
-export interface FileMetrics {
-  compressTime: number
-  resizeTime: number
-  convertTime: number
+export interface ServerMetrics {
+  resizeMs: number
+  uploadMs: number
+  width: number
+  height: number
   originalSize: number
-  processedSize: number
+  resizedSize: number
+  usedOriginal: boolean
 }
 
 export interface UploadFile {
@@ -23,9 +23,9 @@ export interface UploadFile {
   status: FileStatus
   progress: number
   preview: string
-  processedBlob?: Blob
-  processedUrl?: string
-  metrics?: FileMetrics
+  driveId?: string
+  webViewLink?: string
+  serverMetrics?: ServerMetrics
   error?: string
 }
 
@@ -34,16 +34,14 @@ export interface SessionMetrics {
   processedFiles: number
   failedFiles: number
   totalOriginalSize: number
-  totalProcessedSize: number
-  avgCompressTime: number
-  avgResizeTime: number
+  totalResizedSize: number
+  avgResizeMs: number
+  avgUploadMs: number
   peakMemoryMB: number
-  startTime: number
-  endTime?: number
+  elapsedMs: number
 }
 
 export interface MemorySnapshot {
-  timestamp: number
-  usedMB: number
-  totalMB: number
+  t: number
+  mb: number
 }

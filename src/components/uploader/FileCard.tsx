@@ -6,10 +6,13 @@ import { Progress } from '@/components/ui/progress'
 import { formatBytes } from '@/lib/imageProcessor'
 import type { UploadFile } from '@/types/image'
 
-const STATUS_LABEL: Record<UploadFile['status'], { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+const STATUS: Record<
+  UploadFile['status'],
+  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }
+> = {
   pending: { label: '대기', variant: 'secondary' },
-  processing: { label: '처리중', variant: 'default' },
-  done: { label: '완료', variant: 'outline' },
+  uploading: { label: '업로드 중', variant: 'default' },
+  done: { label: '완료', variant: 'default' },
   error: { label: '오류', variant: 'destructive' },
   cancelled: { label: '취소', variant: 'secondary' },
 }
@@ -17,15 +20,15 @@ const STATUS_LABEL: Record<UploadFile['status'], { label: string; variant: 'defa
 interface FileCardProps {
   file: UploadFile
   onCancel?: (id: string) => void
-  onDownload?: (id: string) => void
 }
 
-export function FileCard({ file, onCancel, onDownload }: FileCardProps) {
-  const s = STATUS_LABEL[file.status]
+export function FileCard({ file, onCancel }: FileCardProps) {
+  const s = STATUS[file.status]
+  const m = file.serverMetrics
 
   return (
     <div className="flex gap-3 p-3 rounded-lg bg-zinc-900 border border-zinc-800">
-      <div className="relative w-16 h-16 flex-shrink-0 rounded overflow-hidden bg-zinc-800">
+      <div className="relative w-14 h-14 flex-shrink-0 rounded overflow-hidden bg-zinc-800">
         {file.preview && (
           <Image src={file.preview} alt={file.file.name} fill className="object-cover" unoptimized />
         )}
@@ -34,38 +37,46 @@ export function FileCard({ file, onCancel, onDownload }: FileCardProps) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <p className="text-sm font-medium text-white truncate">{file.file.name}</p>
-          <Badge variant={s.variant} className="flex-shrink-0 text-xs">{s.label}</Badge>
+          {file.status === 'done' ? (
+            <span className="shrink-0 text-xs text-emerald-400">완료</span>
+          ) : (
+            <Badge variant={s.variant} className="shrink-0 text-xs">{s.label}</Badge>
+          )}
         </div>
 
-        <p className="text-xs text-zinc-500 mb-2">
-          {formatBytes(file.file.size)}
-          {file.metrics && (
-            <>
-              {' → '}
-              <span className="text-emerald-400">{formatBytes(file.metrics.processedSize)}</span>
-              {' '}
-              <span className="text-zinc-600">
-                ({((1 - file.metrics.processedSize / file.metrics.originalSize) * 100).toFixed(1)}% 감소)
-              </span>
-            </>
-          )}
-        </p>
-
-        {(file.status === 'processing' || file.status === 'pending') && (
-          <Progress value={file.progress} className="h-1" />
+        {m ? (
+          <>
+            <p className="text-xs text-zinc-500">
+              {m.width}×{m.height}px · {formatBytes(m.originalSize)}
+              {m.usedOriginal ? (
+                <span className="text-zinc-500"> · 원본 최적</span>
+              ) : (
+                <>
+                  {' → '}
+                  <span className="text-emerald-400">{formatBytes(m.resizedSize)}</span>
+                  {' '}
+                  <span className="text-zinc-600">
+                    ({((1 - m.resizedSize / m.originalSize) * 100).toFixed(1)}% 감소)
+                  </span>
+                </>
+              )}
+            </p>
+            <p className="text-xs text-zinc-600 mt-0.5">
+              리사이즈 {m.resizeMs}ms · Drive 업로드 {m.uploadMs}ms
+            </p>
+          </>
+        ) : (
+          <p className="text-xs text-zinc-600">{formatBytes(file.file.size)}</p>
         )}
 
-        {file.metrics && (
-          <p className="text-xs text-zinc-600 mt-1">
-            압축 {file.metrics.compressTime.toFixed(0)}ms · 변환 {file.metrics.convertTime.toFixed(0)}ms
-          </p>
+        {file.status === 'uploading' && (
+          <Progress value={file.progress} className="h-1 mt-2" />
         )}
-
         {file.error && <p className="text-xs text-red-400 mt-1">{file.error}</p>}
       </div>
 
-      <div className="flex flex-col gap-1 flex-shrink-0">
-        {(file.status === 'pending' || file.status === 'processing') && onCancel && (
+      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+        {(file.status === 'pending' || file.status === 'uploading') && onCancel && (
           <button
             onClick={() => onCancel(file.id)}
             className="text-xs text-zinc-500 hover:text-red-400 transition-colors"
@@ -73,13 +84,15 @@ export function FileCard({ file, onCancel, onDownload }: FileCardProps) {
             취소
           </button>
         )}
-        {file.status === 'done' && file.processedUrl && onDownload && (
-          <button
-            onClick={() => onDownload(file.id)}
-            className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+        {file.status === 'done' && file.webViewLink && (
+          <a
+            href={file.webViewLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
           >
-            저장
-          </button>
+            Drive →
+          </a>
         )}
       </div>
     </div>

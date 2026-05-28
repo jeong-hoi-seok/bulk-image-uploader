@@ -2,7 +2,6 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Slider } from '@/components/ui/slider'
-import { Badge } from '@/components/ui/badge'
 import type { OutputFormat, ProcessingOptions } from '@/types/image'
 
 interface SettingsPanelProps {
@@ -11,8 +10,11 @@ interface SettingsPanelProps {
   disabled?: boolean
 }
 
-const FORMATS: OutputFormat[] = ['jpeg', 'webp', 'png']
-const FORMAT_LABEL: Record<OutputFormat, string> = { jpeg: 'JPEG', webp: 'WebP', png: 'PNG' }
+const FORMATS: { value: OutputFormat; label: string; desc: string }[] = [
+  { value: 'jpeg', label: 'JPEG', desc: '범용, 작은 용량' },
+  { value: 'webp', label: 'WebP', desc: '최신, 고압축' },
+  { value: 'png', label: 'PNG', desc: '무손실, 큰 용량' },
+]
 
 export function SettingsPanel({ options, onChange, disabled }: SettingsPanelProps) {
   const set = (patch: Partial<ProcessingOptions>) => onChange({ ...options, ...patch })
@@ -24,69 +26,49 @@ export function SettingsPanel({ options, onChange, disabled }: SettingsPanelProp
       </CardHeader>
       <CardContent className="space-y-5">
         <div>
-          <div className="flex justify-between mb-2">
-            <span className="text-xs text-zinc-400">최대 크기</span>
-            <span className="text-xs text-white">{options.maxWidthOrHeight}px</span>
+          <p className="text-xs text-zinc-400 mb-2">출력 포맷</p>
+          <div className="flex flex-col gap-1.5">
+            {FORMATS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => set({ outputFormat: f.value })}
+                disabled={disabled}
+                className={`flex items-center justify-between px-3 py-2 rounded-md border text-left transition-colors ${
+                  options.outputFormat === f.value
+                    ? 'border-white bg-zinc-800 text-white'
+                    : 'border-zinc-700 bg-transparent text-zinc-400 hover:border-zinc-500'
+                }`}
+              >
+                <span className="text-xs font-medium">{f.label}</span>
+                <span className="text-xs text-zinc-600">{f.desc}</span>
+              </button>
+            ))}
           </div>
-          <Slider
-            min={256}
-            max={4096}
-            step={128}
-            value={[options.maxWidthOrHeight]}
-            onValueChange={(v) => set({ maxWidthOrHeight: (v as number[])[0] })}
-            disabled={disabled}
-          />
         </div>
 
         <div>
           <div className="flex justify-between mb-2">
             <span className="text-xs text-zinc-400">품질</span>
-            <span className="text-xs text-white">{Math.round(options.quality * 100)}%</span>
+            <span className="text-xs text-white">{options.quality}%</span>
           </div>
+          {/* inverted: right=high, left=low → store as-is, display 101-sliderVal */}
           <Slider
-            min={0.1}
-            max={1}
-            step={0.05}
-            value={[options.quality]}
-            onValueChange={(v) => set({ quality: (v as number[])[0] })}
+            min={1} max={100} step={1}
+            value={[101 - options.quality]}
+            onValueChange={(v) => {
+              const raw = Array.isArray(v) ? v[0] : v
+              if (typeof raw === 'number') set({ quality: 101 - raw })
+            }}
             disabled={disabled}
           />
+          <div className="flex justify-between mt-1">
+            <span className="text-xs text-zinc-600">고품질</span>
+            <span className="text-xs text-zinc-600">저품질</span>
+          </div>
         </div>
 
-        <div>
-          <div className="flex justify-between mb-2">
-            <span className="text-xs text-zinc-400">동시 처리</span>
-            <span className="text-xs text-white">{options.concurrency}개</span>
-          </div>
-          <Slider
-            min={1}
-            max={8}
-            step={1}
-            value={[options.concurrency]}
-            onValueChange={(v) => set({ concurrency: (v as number[])[0] })}
-            disabled={disabled}
-          />
-        </div>
-
-        <div>
-          <p className="text-xs text-zinc-400 mb-2">출력 포맷</p>
-          <div className="flex gap-2">
-            {FORMATS.map((f) => (
-              <button
-                key={f}
-                onClick={() => set({ outputFormat: f })}
-                disabled={disabled}
-                className="px-0 py-0 bg-transparent border-none"
-              >
-                <Badge
-                  variant={options.outputFormat === f ? 'default' : 'secondary'}
-                  className="cursor-pointer"
-                >
-                  {FORMAT_LABEL[f]}
-                </Badge>
-              </button>
-            ))}
-          </div>
+        <div className="pt-1 border-t border-zinc-800">
+          <p className="text-xs text-zinc-600">파일 추가 즉시 순차 업로드 · 서버(sharp) 변환 → Drive</p>
         </div>
       </CardContent>
     </Card>
