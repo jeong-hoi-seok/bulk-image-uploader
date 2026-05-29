@@ -1,6 +1,6 @@
 export type OutputFormat = 'jpeg' | 'webp' | 'png'
 
-export type FileStatus = 'pending' | 'uploading' | 'done' | 'error' | 'cancelled'
+export type FileStatus = 'pending' | 'uploading' | 'done' | 'error' | 'cancelled' | 'paused'
 
 export interface ProcessingOptions {
   quality: number // 1 ~ 100 (integer)
@@ -23,6 +23,14 @@ export interface UploadFile {
   status: FileStatus
   progress: number
   preview: string
+  fingerprint?: string
+  options?: ProcessingOptions
+  fileName?: string
+  mimeType?: string
+  processedBlob?: Blob
+  sessionUri?: string
+  uploadedBytes?: number
+  totalBytes?: number
   driveId?: string
   webViewLink?: string
   serverMetrics?: ServerMetrics

@@ -19,11 +19,13 @@ export default function Home() {
     cancelAll,
     clearAll,
     retry,
+    resumePaused,
     setOptions,
   } = useUploadPipeline()
 
   const doneCount = files.filter((f) => f.status === 'done').length
   const hasFiles = files.length > 0
+  const hasPausedFiles = files.some((f) => f.status === 'paused')
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -56,6 +58,14 @@ export default function Home() {
                       {isRunning && <span className="ml-2 text-zinc-500">업로드 중...</span>}
                     </span>
                     <div className="flex gap-2">
+                      {hasPausedFiles && !isRunning && (
+                        <button
+                          onClick={resumePaused}
+                          className="px-3 py-1.5 text-xs rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                        >
+                          재시작
+                        </button>
+                      )}
                       {isRunning && (
                         <button
                           onClick={cancelAll}

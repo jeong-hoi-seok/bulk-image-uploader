@@ -15,6 +15,7 @@ const STATUS: Record<
   done: { label: '완료', variant: 'default' },
   error: { label: '오류', variant: 'destructive' },
   cancelled: { label: '취소', variant: 'secondary' },
+  paused: { label: '중단됨', variant: 'destructive' },
 }
 
 interface FileCardProps {
@@ -85,7 +86,7 @@ export function FileCard({ file, onCancel, onRetry }: FileCardProps) {
             취소
           </button>
         )}
-        {(file.status === 'error' || file.status === 'cancelled') && onRetry && (
+        {(file.status === 'error' || file.status === 'cancelled' || file.status === 'paused') && onRetry && (
           <button
             onClick={() => onRetry(file.id)}
             className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-medium"
